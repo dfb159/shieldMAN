@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+package message_board;
+
+message Credentials {
+    string username = 1;
+    string password = 2;
+}
+
+message Cookie {
+    string cookie = 1;
+}
+
+message PostAmount {
+    int32 amount = 1;
+}
+
+message Post {
+    string text = 1;
+}
+
+message ReadPost {
+    Cookie cookie = 1;
+    int32 index = 2;
+}
+
+message WritePost {
+    Cookie cookie = 1;
+    Post post = 2;
+}
+
+service MessageBoard {
+    rpc register(Credentials) returns (google.protobuf.Empty) {}
+    rpc login(Credentials) returns (Cookie) {}
+    rpc logout(Cookie) returns (google.protobuf.Empty) {}
+    rpc get_posts(Cookie) returns (PostAmount) {}
+    rpc read(ReadPost) returns (Post) {}
+    rpc write(WritePost) returns (google.protobuf.Empty) {}
+}
