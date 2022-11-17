@@ -42,28 +42,15 @@ class LiveClient:
 
     def interactive(self):
         while cmd := input("cmd: "):
-            print(eval(cmd))
-
-def print_space(*args):
-    print("-----------------")
-    print(*args)
-    print("-----------------")
+            try:
+                print(eval(cmd))
+            except grpc.RpcError as e:
+                print(e.code())
+                print(e.details())
+            except Exception as e:
+                print(e)
     
 if __name__ == "__main__":
     c = LiveClient()
-    c.register("Hello", "World")
-    cookie: str = c.login("Hello", "World")
-    print(f"{cookie=}")
-    c.write(cookie, "Hello")
-    c.write(cookie, "World")
-    print(list(c.read_all(cookie)))
-    try:
-        c.read(cookie, 10)
-    except grpc.RpcError as rpc_error:
-        print_space(rpc_error)
-        print_space(rpc_error.details())
-        print_space(status := rpc_error.code())
-        print_space(status.name)
-        print_space(status.value)
-        raise rpc_error
+    c.interactive()
 
