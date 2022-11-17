@@ -4,7 +4,7 @@ from protos.message_board.message_board_pb2 import Cookie, Credentials, Post, Re
 from protos.message_board.message_board_pb2_grpc import MessageBoardStub
 
 
-class LiveClient:
+class MessageBoardClient:
 
     def __init__(self):
         channel = grpc.insecure_channel('localhost:50051')
@@ -49,8 +49,15 @@ class LiveClient:
                 print(e.details())
             except Exception as e:
                 print(e)
+
+    def init_testuser(self):
+        self.register("Test", "test")
+        cookie = self.login("Test", "test")
+        self.write(cookie, "Hello, World!")
+        self.write(cookie, "FooBar")
+        return cookie
     
 if __name__ == "__main__":
-    c = LiveClient()
+    c = MessageBoardClient()
     c.interactive()
 

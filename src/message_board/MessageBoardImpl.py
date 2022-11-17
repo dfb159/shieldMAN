@@ -1,24 +1,24 @@
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
+import traceback
 from typing import Generator
 from uuid import uuid4
 import grpc
 from protos.message_board.message_board_pb2_grpc import MessageBoardServicer, add_MessageBoardServicer_to_server
 from protos.message_board.message_board_pb2 import Cookie, Credentials, Post, PostAmount, ReadPost, WritePost
 from google.protobuf.empty_pb2 import Empty
-from Exceptions import InvalidArgument, NotFound, PermissionDenied, Unauthenticated
+from protos.GrpcExceptions import InvalidArgument, NotFound, PermissionDenied, Unauthenticated
 
 def wrap_exceptions(func):
 
     @wraps(func)
     def call(self, request, context):
         try:
-            print("calling function")
             return func(self, request, context)
         except Unauthenticated:
             context.set_code(grpc.StatusCode.UNAUTHENTICATED)
             raise
-        except InvalidArgument:
+        except (InvalidArgument):
             context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
             raise
         except NotFound:
@@ -26,6 +26,9 @@ def wrap_exceptions(func):
             raise
         except PermissionDenied:
             context.set_code(grpc.StatusCode.PERMISSION_DENIED)
+            raise
+        except Exception as e:
+            print(f"{type(e).__name__}: {str(e)}")
             raise
     
     return call
