@@ -44,6 +44,11 @@ class LiveClient:
         while cmd := input("cmd: "):
             print(eval(cmd))
 
+def print_space(*args):
+    print("-----------------")
+    print(*args)
+    print("-----------------")
+    
 if __name__ == "__main__":
     c = LiveClient()
     c.register("Hello", "World")
@@ -55,5 +60,10 @@ if __name__ == "__main__":
     try:
         c.read(cookie, 10)
     except grpc.RpcError as rpc_error:
-        print(rpc_error)
-    
+        print_space(rpc_error)
+        print_space(rpc_error.details())
+        print_space(status := rpc_error.code())
+        print_space(status.name)
+        print_space(status.value)
+        raise rpc_error
+
