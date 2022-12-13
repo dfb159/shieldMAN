@@ -1,3 +1,4 @@
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 import logging
@@ -47,7 +48,7 @@ class MessageBoardImpl(MessageBoardServicer):
         super().__init__()
         self.active: dict[str, str] = {}
         self.passwords: dict[str, str] = {}
-        self.messages: dict[str, list[str]] = {}
+        self.messages: dict[str, list[str]] = defaultdict(list)
         self.logger = logging.getLogger()
         self.logger.info("Starting server...")
 
@@ -57,7 +58,6 @@ class MessageBoardImpl(MessageBoardServicer):
         if request.username is None: raise InvalidArgument("Please enter a username!")
         if request.password is None: raise InvalidArgument("Please enter a password!")
         self.passwords[request.username] = request.password # exploit by setting new password for existing user
-        self.messages[request.username] = []
         return Empty()
 
     @wrap_exceptions
@@ -117,11 +117,14 @@ class MessageBoardImpl(MessageBoardServicer):
         return Empty()
     
 def serve():
+    print("Starting server...")
     server = grpc.server(ThreadPoolExecutor(max_workers=10))
     add_MessageBoardServicer_to_server(MessageBoardImpl(), server)
     server.add_insecure_port('[::]:50051')
     server.start()
+    print("Started!")
     server.wait_for_termination()
+    print("Closing server...")
 
 if __name__ == "__main__":
     serve()

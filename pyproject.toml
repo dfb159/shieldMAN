@@ -9,6 +9,8 @@ readme = "README.md"
 python = ">=3.7,<3.11"
 tqdm = "*"
 grpcio-tools = "*"
+pysimplegui = "*"
+pyperclip = "*"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^2.20.0"
