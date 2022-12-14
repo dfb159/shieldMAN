@@ -74,7 +74,8 @@ class MessageBoardClientSimpleGui(MessageBoardClient):
         self.logout(cookie)
 
     def show_main(self):
-        layout = [[sg.Text("Welcome to the ultimate Message Board!")],
+        layout = [
+            [sg.Text("Welcome to the ultimate Message Board!")],
             [sg.Button("Login")],
             [sg.Button("Register")],
             [sg.Button("Check Flag")],
