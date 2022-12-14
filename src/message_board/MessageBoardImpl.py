@@ -2,6 +2,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 import logging
+import colorlog
 from sys import stdout
 import sys
 from typing import Generator
@@ -27,14 +28,14 @@ def setup_logger(fileLevel=logging.INFO, outLevel=logging.DEBUG, errLevel=loggin
 
     if outLevel:
         outHandler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter(fmt='%(levelname)s:%(message)s')
+        formatter = colorlog.ColoredFormatter(fmt='%(levelname)s:%(message)s')
         outHandler.setFormatter(formatter)
         outHandler.setLevel(outLevel)
         rootLogger.addHandler(outHandler)
 
     if errLevel:
         errHandler = logging.StreamHandler(sys.stderr)
-        formatter = logging.Formatter(fmt='%(levelname)s:%(message)s')
+        formatter = colorlog.ColoredFormatter(fmt='%(levelname)s:%(message)s')
         errHandler.setFormatter(formatter)
         errHandler.setLevel(errLevel)
         rootLogger.addHandler(errHandler)
