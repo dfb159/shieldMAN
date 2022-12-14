@@ -8,7 +8,7 @@ A short and easy introduction of flaghunting. Click through the example MessageB
 As prerequisites you will need python and poetry, thats it!
 Just make sure to add the poetry path to your path variables if necessary.
 
-Now clone this repository into a directory of your choice, enter it and run the following three commands:
+Now clone this repository into a directory of your choice, enter it and run the following three commands inside a powershell:
 1. `.\build.ps1` to setup python, all requirements and the virtual environment.
 2. `.\runServer.ps1` to start the server in this console.
 3. `.\runClient.ps1` in another console to actually start the GUI.
