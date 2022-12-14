@@ -2,7 +2,8 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 import logging
-import traceback
+from sys import stdout
+import sys
 from typing import Generator
 from uuid import uuid4
 import grpc
@@ -11,7 +12,34 @@ from protos.message_board.message_board_pb2 import Cookie, Credentials, Post, Po
 from google.protobuf.empty_pb2 import Empty
 from protos.GrpcExceptions import InvalidArgument, NotFound, PermissionDenied, Unauthenticated
 
-logging.basicConfig(filename='logs/message_board.log', encoding='utf-8', level=logging.INFO, format='%(asctime)s:%(levelname)s:%(threadName)s:%(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
+def setup_logger(fileLevel=logging.INFO, outLevel=logging.DEBUG, errLevel=logging.WARN):
+
+    rootLogger = logging.getLogger()
+    rootLogger.setLevel(logging.INFO)
+
+    if fileLevel:
+        fileHandler = logging.FileHandler(filename='logs/message_board.log', mode='a', encoding='utf-8', delay=True)
+        formatter = logging.Formatter(fmt='%(asctime)s:%(levelname)s:%(threadName)s:%(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        fileHandler.setFormatter(formatter)
+        fileHandler.setLevel(fileLevel)
+        rootLogger.addHandler(fileHandler)
+
+    if outLevel:
+        outHandler = logging.StreamHandler(sys.stdout)
+        formatter = logging.Formatter(fmt='%(levelname)s:%(message)s')
+        outHandler.setFormatter(formatter)
+        outHandler.setLevel(outLevel)
+        rootLogger.addHandler(outHandler)
+
+    if errLevel:
+        errHandler = logging.StreamHandler(sys.stderr)
+        formatter = logging.Formatter(fmt='%(levelname)s:%(message)s')
+        errHandler.setFormatter(formatter)
+        errHandler.setLevel(errLevel)
+        rootLogger.addHandler(errHandler)
+
+    logging.info("Logger setup completed")
 
 def wrap_exceptions(func):
 
@@ -50,7 +78,6 @@ class MessageBoardImpl(MessageBoardServicer):
         self.passwords: dict[str, str] = {}
         self.messages: dict[str, list[str]] = defaultdict(list)
         self.logger = logging.getLogger()
-        self.logger.info("Starting server...")
 
     @wrap_exceptions
     def register(self, request: Credentials, context) -> Cookie:
@@ -117,14 +144,18 @@ class MessageBoardImpl(MessageBoardServicer):
         return Empty()
     
 def serve():
-    print("Starting server...")
+    logging.info("server setup")
     server = grpc.server(ThreadPoolExecutor(max_workers=10))
     add_MessageBoardServicer_to_server(MessageBoardImpl(), server)
     server.add_insecure_port('[::]:50051')
-    server.start()
-    print("Started!")
-    server.wait_for_termination()
-    print("Closing server...")
+    try:
+        logging.info("server starting")
+        server.start()
+        logging.info("server running...")
+        server.wait_for_termination()
+    finally:
+        logging.info("server terminated")
 
 if __name__ == "__main__":
+    setup_logger()
     serve()
