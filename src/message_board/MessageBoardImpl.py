@@ -3,7 +3,6 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 import logging
 import colorlog
-from sys import stdout
 import sys
 from typing import Generator
 from uuid import uuid4
@@ -17,25 +16,25 @@ from protos.GrpcExceptions import InvalidArgument, NotFound, PermissionDenied, U
 def setup_logger(fileLevel=logging.INFO, outLevel=logging.DEBUG, errLevel=logging.WARN):
 
     rootLogger = logging.getLogger()
-    rootLogger.setLevel(logging.INFO)
+    rootLogger.setLevel(logging.DEBUG)
 
-    if fileLevel:
+    if fileLevel is not None:
         fileHandler = logging.FileHandler(filename='logs/message_board.log', mode='a', encoding='utf-8', delay=True)
         formatter = logging.Formatter(fmt='%(asctime)s:%(levelname)s:%(threadName)s:%(message)s', datefmt='%Y-%m-%d %H:%M:%S')
         fileHandler.setFormatter(formatter)
         fileHandler.setLevel(fileLevel)
         rootLogger.addHandler(fileHandler)
 
-    if outLevel:
+    if outLevel is not None:
         outHandler = logging.StreamHandler(sys.stdout)
-        formatter = colorlog.ColoredFormatter(fmt='%(levelname)s:%(message)s')
+        formatter = colorlog.ColoredFormatter(fmt='%(log_color)s%(levelname)-8s%(reset)s | %(log_color)s%(message)s%(reset)s')
         outHandler.setFormatter(formatter)
         outHandler.setLevel(outLevel)
         rootLogger.addHandler(outHandler)
 
-    if errLevel:
+    if errLevel is not None:
         errHandler = logging.StreamHandler(sys.stderr)
-        formatter = colorlog.ColoredFormatter(fmt='%(levelname)s:%(message)s')
+        formatter = colorlog.ColoredFormatter(fmt='%(log_color)s%(levelname)-8s%(reset)s | %(log_color)s%(message)s%(reset)s')
         errHandler.setFormatter(formatter)
         errHandler.setLevel(errLevel)
         rootLogger.addHandler(errHandler)
@@ -158,5 +157,5 @@ def serve():
         logging.info("server terminated")
 
 if __name__ == "__main__":
-    setup_logger()
+    setup_logger(errLevel=None)
     serve()
