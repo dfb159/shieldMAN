@@ -13,30 +13,49 @@ message Cookie {
     string cookie = 1;
 }
 
-message PostAmount {
-    int32 amount = 1;
-}
-
 message Post {
     string text = 1;
 }
 
-message ReadPost {
-    Cookie cookie = 1;
-    int32 index = 2;
+message PostCount {
+    int32 count = 1;
 }
 
-message WritePost {
-    Cookie cookie = 1;
-    Post post = 2;
+message BoardAuth {
+    string boardid = 1;
+    string cookie = 2;
+}
+
+message BoardReadRange {
+    BoardAuth auth = 1;
+    int32 index = 2;
+    int32 count = 3;
+}
+
+message BoardCreate {
+    BoardAuth auth = 1;
+    string boardname = 2;
+    bool public = 3;
+}
+
+message BoardText {
+    BoardAuth auth = 1;
+    string text = 2;
 }
 
 service MessageBoard {
     rpc register(Credentials) returns (google.protobuf.Empty) {}
     rpc login(Credentials) returns (Cookie) {}
     rpc logout(Cookie) returns (google.protobuf.Empty) {}
-    rpc get_posts(Cookie) returns (PostAmount) {}
-    rpc read(ReadPost) returns (Post) {}
-    rpc read_all(Cookie) returns (stream Post) {}
-    rpc write(WritePost) returns (google.protobuf.Empty) {}
+    rpc get_count(BoardAuth) returns (PostCount) {}
+    rpc read(BoardReadRange) returns (stream Post) {}
+    rpc read_all(BoardAuth) returns (stream Post) {}
+    rpc write(BoardText) returns (google.protobuf.Empty) {}
+    rpc create(BoardCreate) returns (google.protobuf.Empty) {}
+    rpc delete(BoardAuth) returns (google.protobuf.Empty) {}
+    rpc add_owner(BoardText) returns (google.protobuf.Empty) {}
+    rpc add_reader(BoardText) returns (google.protobuf.Empty) {}
+    rpc remove_owner(BoardText) returns (google.protobuf.Empty) {}
+    rpc remove_reader(BoardText) returns (google.protobuf.Empty) {}
+    rpc rename(BoardText) returns (google.protobuf.Empty) {}
 }

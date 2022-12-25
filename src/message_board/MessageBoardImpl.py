@@ -2,16 +2,17 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 import logging
+from logging import DEBUG, INFO, WARNING, ERROR, CRITICAL
 import colorlog
 import sys
 from typing import Generator
 from uuid import uuid4
 import grpc
+from message_board.Board import Board
 from protos.message_board.message_board_pb2_grpc import MessageBoardServicer, add_MessageBoardServicer_to_server
-from protos.message_board.message_board_pb2 import Cookie, Credentials, Post, PostAmount, ReadPost, WritePost
-from google.protobuf.empty_pb2 import Empty
+from protos.message_board.message_board_pb2 import Cookie, Credentials, Post, PostCount, BoardAuth, BoardCreate, BoardReadRange, BoardText
 from protos.GrpcExceptions import InvalidArgument, NotFound, PermissionDenied, Unauthenticated
-
+from google.protobuf.empty_pb2 import Empty
 
 def setup_logger(fileLevel=logging.INFO, outLevel=logging.DEBUG, errLevel=logging.WARN):
 
@@ -42,11 +43,10 @@ def setup_logger(fileLevel=logging.INFO, outLevel=logging.DEBUG, errLevel=loggin
     logging.info("Logger setup completed")
 
 def wrap_exceptions(func):
-
     @wraps(func)
-    def call(self, request, context):
+    def wrapper(self: "MessageBoardImpl", request, context):
         try:
-            return func(self, request, context)
+            return func(self, request, context) or Empty()
         except Unauthenticated:
             context.set_code(grpc.StatusCode.UNAUTHENTICATED)
             self.logger.warning("Unauthenticated")
@@ -67,8 +67,28 @@ def wrap_exceptions(func):
             self.logger.exception(f"{type(e).__name__}: {str(e)}")
             raise
     
-    return call
-        
+    return wrapper
+
+def log(level: int, message: str):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(self: "MessageBoardImpl", request, context):
+            self.logger.log(level, message.format(self = self, request = request, context = context))
+            return func(self, request, context)
+        return wrapper
+    return decorator
+
+def null(variable: str, message: str = None):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(self, request, context):
+            r = request
+            for v in variable.split("."):
+                r = getattr(r, v)
+                if r is None: raise InvalidArgument(message)
+            return func(self, request, context)
+        return wrapper
+    return decorator
 
 class MessageBoardImpl(MessageBoardServicer):
 
@@ -76,72 +96,154 @@ class MessageBoardImpl(MessageBoardServicer):
         super().__init__()
         self.active: dict[str, str] = {}
         self.passwords: dict[str, str] = {}
-        self.messages: dict[str, list[str]] = defaultdict(list)
+        self.boards: dict[str, Board] = defaultdict(Board)
         self.logger = logging.getLogger()
 
     @wrap_exceptions
-    def register(self, request: Credentials, context) -> Cookie:
-        self.logger.info("Register Request for username: %s with password: %s", request.username, request.password)
-        if request.username is None: raise InvalidArgument("Please enter a username!")
-        if request.password is None: raise InvalidArgument("Please enter a password!")
-        self.passwords[request.username] = request.password # exploit by setting new password for existing user
-        return Empty()
+    @log(INFO, "Register Request for username: {request.username} with password: {request.password}")
+    @null("username", "Please enter a username!")
+    @null("password", "Please enter a password!")
+    def register(self, request: Credentials, context):
+        self.passwords[request.username] = request.password
 
     @wrap_exceptions
-    def login(self, request: Credentials, context):
-        self.logger.info("Login Request for username: %s with password: %s", request.username, request.password)
-        if request.username is None: raise InvalidArgument("Please enter a username!")
-        if request.password is None: raise InvalidArgument("Please enter a password!")
-        if request.username not in self.passwords: raise NotFound("User is not registered!")
+    @log(INFO, "Login Request for username: {request.username} with password: {request.password}")
+    @null("username", "Please enter a username!")
+    @null("password", "Please enter a password!")
+    def login(self, request: Credentials, context) -> Cookie:
+        if request.username not in self.passwords: raise InvalidArgument("User is not registered!")
         if self.passwords[request.username] != request.password: raise Unauthenticated("Password is wrong!")
         cookie = uuid4().hex
         self.active[cookie] = request.username
         return Cookie(cookie=cookie)
 
     @wrap_exceptions
+    @log(INFO, "Logout Request for cookie: {request.cookie}")
+    @null("cookie", "Please enter a cookie!")
     def logout(self, request: Cookie, context):
-        self.logger.info("Logout Request for cookie: %s", request.cookie)
-        if request.cookie is None: raise InvalidArgument("Please enter a cookie!")
         if request.cookie not in self.active: raise Unauthenticated("Cookie is not authenticated!")
         del self.active[request.cookie]
-        return Empty()
 
     @wrap_exceptions
-    def get_posts(self, request: Cookie, context) -> PostAmount:
-        self.logger.info("GetPosts Request for cookie: %s", request.cookie)
-        if request.cookie is None: raise InvalidArgument("Please enter a cookie!")
-        if request.cookie not in self.active: raise Unauthenticated("Cookie is not authenticated!")
-        username = self.active[request.cookie]
-        return PostAmount(amount=len(self.messages[username]))
+    @log(INFO, "GetPosts Request for cookie: {request.cookie}")
+    @null("boardid", "Please enter a boardid!")
+    @null("cookie", "Please enter a cookie!")
+    def get_count(self, request: BoardAuth, context) -> PostCount:
+        username = self.get_username(request.cookie)
+        board = self.get_board(request.boardid)
+        return PostCount(count=board.amount(username))
 
     @wrap_exceptions
-    def read(self, request: ReadPost, context) -> Post:
-        self.logger.info("Read Request for cookie: %s and index: %s", request.cookie.cookie, request.index)
-        if request.cookie is None or (cookie := request.cookie.cookie) is None: raise InvalidArgument("Please enter a cookie!")
-        if cookie not in self.active: raise Unauthenticated("Cookie is not authenticated!")
-        username = self.active[cookie]
+    @log(INFO, "Read Request on board: {request.auth.boardid} for cookie: {request.auth.cookie} and index: {request.auth.index}, count: {request.auth.count}")
+    @null("auth.boardid", "Please enter a boardid!")
+    @null("auth.cookie", "Please enter a cookie!")
+    @null("count", "Please enter a count!")
+    def read(self, request: BoardReadRange, context) -> Generator[Post, None, None]:
+        username = self.get_username(request.auth.cookie)
+        board = self.get_board(request.auth.boardid)
         index = request.index or 0
-        return Post(text=self.messages[username][index])
+        count = request.count
+        for msg in board.read(username, index, count):
+            yield Post(text = msg)
 
     @wrap_exceptions
-    def read_all(self, request: Cookie, context) -> Generator[Post, None, None]:
-        self.logger.info("ReadAll Request for cookie: %s", request.cookie)
-        if request.cookie is None: raise InvalidArgument("Please enter a cookie!")
-        if request.cookie not in self.active: raise Unauthenticated("Cookie is not authenticated!")
-        username = self.active[request.cookie]
-        for msg in self.messages[username]:
+    @log(INFO, "Readall Request on board: {request.auth.boardid} for cookie: {request.auth.cookie}")
+    @null("boardid", "Please enter a boardid!")
+    @null("cookie", "Please enter a cookie!")
+    def read_all(self, request: BoardAuth, context) -> Generator[Post, None, None]:
+        username = self.get_username(request.cookie)
+        board = self.get_board(request.boardid)
+        for msg in board.read_all(username):
             yield Post(text = msg)
       
-    @wrap_exceptions  
-    def write(self, request: WritePost, context):
-        self.logger.info("Write Request for cookie: %s and text: %s", request.cookie.cookie, request.post.text)
-        if request.cookie is None or (cookie := request.cookie.cookie) is None: raise InvalidArgument("Please enter a cookie!")
-        if cookie not in self.active: raise Unauthenticated("Cookie is not authenticated!")
-        if request.post is None or (text := request.post.text) is None: raise InvalidArgument("Please enter a text!")
-        username = self.active[cookie]
-        if len(self.messages[username]) >= 50: raise PermissionDenied("Can not post any more messages with this account!")
-        self.messages[username].append(text)
-        return Empty()
+    @wrap_exceptions
+    @log(INFO, "Write Request on board: {request.auth.boardid} for cookie: {request.auth.cookie} and text: {request.text}")
+    @null("auth.boardid", "Please enter a boardid!")
+    @null("auth.cookie", "Please enter a cookie!")
+    @null("text", "Please enter a text!")
+    def write(self, request: BoardText, context):
+        cookie = request.auth.cookie
+        username = self.get_username(cookie)
+        board = self.get_board(request.auth.boardid)
+        board.write(username, request.text)
+        
+    @wrap_exceptions
+    @log(INFO, "Create Request for board: {request.auth.boardid} and cookie: {request.auth.cookie}. Board is public = {request.public}")
+    @null("auth.boardid", "Please enter a boardid!")
+    @null("auth.cookie", "Please enter a cookie!")
+    def create(self, request: BoardCreate, context):
+        username = self.get_username(request.auth.cookie)
+        self.boards[request.auth.boardid] = Board(request.boardname, username, request.public or True)
+        
+    @wrap_exceptions
+    @log(INFO, "Delete Request for board: {request.boardid} and cookie: {request.cookie}")
+    @null("boardid", "Please enter a boardid!")
+    @null("cookie", "Please enter a cookie!")
+    def delete(self, request: BoardAuth, context):
+        username = self.get_username(request.cookie)
+        board = self.get_board(request.boardid)
+        board.is_owner(username)
+        del self.boards[request.boardid]
+
+    @wrap_exceptions
+    @log(INFO, "Add Owner Request for board: {request.auth.boardid} and cookie: {request.auth.cookie} for new username: {request.text}")
+    @null("auth.boardid", "Please enter a boardid!")
+    @null("auth.cookie", "Please enter a cookie!")
+    @null("text", "Please enter a username!")
+    def add_owner(self, request: BoardText, context):
+        username = self.get_username(request.auth.cookie)
+        board = self.get_board(request.auth.boardid)
+        board.add_owner(username, request.text)
+        
+    @wrap_exceptions
+    @log(INFO, "Add Reader Request for board: {request.auth.boardid} and cookie: {request.auth.cookie} for new username: {request.text}")
+    @null("auth.boardid", "Please enter a boardid!")
+    @null("auth.cookie", "Please enter a cookie!")
+    @null("text", "Please enter a username!")
+    def add_reader(self, request: BoardText, context):
+        username = self.get_username(request.auth.cookie)
+        board = self.get_board(request.auth.boardid)
+        board.add_reader(username, request.text)
+        
+    @wrap_exceptions
+    @log(INFO, "Remove Owner Request for board: {request.auth.boardid} and cookie: {request.auth.cookie} for new username: {request.text}")
+    @null("auth.boardid", "Please enter a boardid!")
+    @null("auth.cookie", "Please enter a cookie!")
+    @null("text", "Please enter a username!")
+    def remove_owner(self, request: BoardText, context):
+        username = self.get_username(request.auth.cookie)
+        board = self.get_board(request.auth.boardid)
+        board.remove_owner(username, request.text)
+        
+    @wrap_exceptions
+    @log(INFO, "Remove Reader Request for board: {request.auth.boardid} and cookie: {request.auth.cookie} for new username: {request.text}")
+    @null("auth.boardid", "Please enter a boardid!")
+    @null("auth.cookie", "Please enter a cookie!")
+    @null("text", "Please enter a username!")
+    def remove_reader(self, request: BoardText, context):
+        username = self.get_username(request.auth.cookie)
+        board = self.get_board(request.auth.boardid)
+        board.remove_reader(username, request.text)
+
+    @wrap_exceptions
+    @log(INFO, "Rename Request for board: {request.auth.boardid} and cookie: {request.auth.cookie} for new boardname: {request.text}")
+    @null("auth.boardid", "Please enter a boardid!")
+    @null("auth.cookie", "Please enter a cookie!")
+    @null("text", "Please enter a username!")
+    def rename(self, request: BoardText, context):
+        username = self.get_username(request.auth.cookie)
+        board = self.get_board(request.auth.boardid)
+        board.rename(username, request.text)
+
+    def get_username(self, cookie: str):
+        if cookie not in self.active:
+            raise Unauthenticated("Cookie is not authenticated!")
+        return self.active[cookie]
+
+    def get_board(self, boardid: str):
+        if boardid not in self.boards:
+            raise InvalidArgument("This board does not exist!")
+        return self.boards[boardid]
     
 def serve():
     logging.info("server setup")
