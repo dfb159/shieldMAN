@@ -235,6 +235,15 @@ class MessageBoardImpl(MessageBoardServicer):
         board = self.get_board(request.auth.boardid)
         board.rename(username, request.text)
 
+    @wrap_exceptions
+    @log(INFO, "Get Name Request for board: {request.auth.boardid} and cookie: {request.auth.cookie}")
+    @null("boardid", "Please enter a boardid!")
+    @null("cookie", "Please enter a cookie!")
+    def rename(self, request: BoardAuth, context):
+        username = self.get_username(request.auth.cookie)
+        board = self.get_board(request.auth.boardid)
+        return board.get_name(username)
+
     def get_username(self, cookie: str):
         if cookie not in self.active:
             raise Unauthenticated("Cookie is not authenticated!")

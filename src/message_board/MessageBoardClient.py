@@ -1,9 +1,10 @@
 from math import ceil
 from multiprocessing.connection import answer_challenge
 from time import sleep
+from typing import Generator
 from uuid import uuid4
 import grpc
-from protos.message_board.message_board_pb2 import Cookie, Credentials, Post, ReadPost, WritePost
+from protos.message_board.message_board_pb2 import BoardAuth, BoardCreate, BoardReadRange, BoardText, Cookie, Credentials, PostCount
 from protos.message_board.message_board_pb2_grpc import MessageBoardStub
 import PySimpleGUI as sg
 
@@ -14,11 +15,11 @@ class MessageBoardClient:
         self.stub = MessageBoardStub(channel)
 
     def register(self, username: str, password: str):
-        creds = Credentials(username=str(username), password=str(password))
+        creds = Credentials(username=username, password=password)
         self.stub.register(creds)
 
-    def login(self, username: str, password: str):
-        creds = Credentials(username=str(username), password=str(password))
+    def login(self, username: str, password: str) -> str:
+        creds = Credentials(username=username, password=password)
         resp: Cookie = self.stub.login(creds)
         return resp.cookie
 
@@ -26,22 +27,64 @@ class MessageBoardClient:
         cookie = Cookie(cookie=cookie)
         self.stub.logout(cookie)
 
-    def write(self, cookie: str, text: str):
-        cookie = Cookie(cookie = cookie)
-        post = Post(text = text)
-        writePost = WritePost(cookie = cookie, post = post)
-        self.stub.write(writePost)
+    def get_count(self, boardid: str, cookie: str) -> int:
+        auth = BoardAuth(boardid=boardid, cookie=cookie)
+        resp: PostCount = self.stub.get_count(auth)
+        return resp.count
 
-    def read_all(self, cookie: str):
-        cookie = Cookie(cookie = cookie)
-        for resp in self.stub.read_all(cookie):
+    def read(self, boardid: str, cookie: str, index: int = 0, count: int = 1) -> Generator[str, None, None]:
+        auth = BoardAuth(boardid, cookie)
+        board_range = BoardReadRange(auth=auth, index=index, count=count)
+        for resp in self.stub.read(board_range):
             yield resp.text
 
-    def read(self, cookie: str, index: int):
-        cookie = Cookie(cookie = cookie)
-        readPost = ReadPost(cookie = cookie, index = index)
-        resp: Post = self.stub.read(readPost)
-        return resp.text
+    def read_all(self, boardid: str, cookie: str) -> Generator[str, None, None]:
+        auth = BoardAuth(boardid=boardid, cookie=cookie)
+        for resp in self.stub.read_all(auth):
+            yield resp.text
+
+    def write(self, boardid: str, cookie: str, text: str):
+        auth = BoardAuth(boardid=boardid, cookie=cookie)
+        board_text = BoardText(auth=auth, text=text)
+        self.stub.write(board_text)
+
+    def create(self, boardid: str, cookie: str, boardname: str, public: bool = True):
+        auth = BoardAuth(boardid=boardid, cookie=cookie)
+        board_create = BoardCreate(auth=auth, boardname=boardname, public=public)
+        self.stub.create(board_create)
+
+    def delete(self, boardid: str, cookie: str):
+        auth = BoardAuth(boardid=boardid, cookie=cookie)
+        self.stub.delete(auth)
+
+    def add_owner(self, boardid: str, cookie: str, username: str):
+        auth = BoardAuth(boardid=boardid, cookie=cookie)
+        board_text = BoardText(auth=auth, text=username)
+        self.stub.add_owner(board_text)
+
+    def add_reader(self, boardid: str, cookie: str, username: str):
+        auth = BoardAuth(boardid=boardid, cookie=cookie)
+        board_text = BoardText(auth=auth, text=username)
+        self.stub.add_reader(board_text)
+
+    def remove_owner(self, boardid: str, cookie: str, username: str):
+        auth = BoardAuth(boardid=boardid, cookie=cookie)
+        board_text = BoardText(auth=auth, text=username)
+        self.stub.remove_owner(board_text)
+
+    def remove_reader(self, boardid: str, cookie: str, username: str):
+        auth = BoardAuth(boardid=boardid, cookie=cookie)
+        board_text = BoardText(auth=auth, text=username)
+        self.stub.remove_reader(board_text)
+
+    def rename(self, boardid: str, cookie: str, boardname: str):
+        auth = BoardAuth(boardid=boardid, cookie=cookie)
+        board_text = BoardText(auth=auth, text=boardname)
+        self.stub.rename(board_text)
+
+    def get_name(self, boardid: str, cookie: str) -> str:
+        auth = BoardAuth(boardid=boardid, cookie=cookie)
+        return self.stub.get_name(auth).text
 
     def interactive(self):
         while cmd := input("cmd: "):

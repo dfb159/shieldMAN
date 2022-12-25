@@ -86,3 +86,7 @@ class Board:
     def amount(self):
         return len(self.messages)
 
+    @wrap_reader
+    def get_name(self):
+        return self.name
+

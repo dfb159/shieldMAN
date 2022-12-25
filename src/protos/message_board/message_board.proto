@@ -9,11 +9,7 @@ message Credentials {
     string password = 2;
 }
 
-message Cookie {
-    string cookie = 1;
-}
-
-message Post {
+message Text {
     string text = 1;
 }
 
@@ -45,11 +41,11 @@ message BoardText {
 
 service MessageBoard {
     rpc register(Credentials) returns (google.protobuf.Empty) {}
-    rpc login(Credentials) returns (Cookie) {}
-    rpc logout(Cookie) returns (google.protobuf.Empty) {}
+    rpc login(Credentials) returns (Text) {}
+    rpc logout(Text) returns (google.protobuf.Empty) {}
     rpc get_count(BoardAuth) returns (PostCount) {}
-    rpc read(BoardReadRange) returns (stream Post) {}
-    rpc read_all(BoardAuth) returns (stream Post) {}
+    rpc read(BoardReadRange) returns (stream Text) {}
+    rpc read_all(BoardAuth) returns (stream Text) {}
     rpc write(BoardText) returns (google.protobuf.Empty) {}
     rpc create(BoardCreate) returns (google.protobuf.Empty) {}
     rpc delete(BoardAuth) returns (google.protobuf.Empty) {}
@@ -58,4 +54,5 @@ service MessageBoard {
     rpc remove_owner(BoardText) returns (google.protobuf.Empty) {}
     rpc remove_reader(BoardText) returns (google.protobuf.Empty) {}
     rpc rename(BoardText) returns (google.protobuf.Empty) {}
+    rpc get_name(BoardAuth) returns (Text) {}
 }
