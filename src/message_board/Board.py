@@ -8,7 +8,7 @@ def wrap_owner(func):
     def wrapper(self: "Board", owner: str, *args, **kwargs):
         if owner not in self.owner:
             raise PermissionDenied("You are not an owner of this board!")
-        return func(*args, **kwargs)
+        return func(self, *args, **kwargs)
     return wrapper
     
 def wrap_reader(func):
@@ -16,7 +16,7 @@ def wrap_reader(func):
     def wrapper(self: "Board", reader: str, *args, **kwargs):
         if self.private and reader not in self.reader and reader not in self.owner:
             raise PermissionDenied("You cannot read this board!")
-        return func(*args, **kwargs)
+        return func(self, *args, **kwargs)
     return wrapper
 
 class Board:
