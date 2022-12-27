@@ -16,33 +16,39 @@ from protos.message_board.message_board_pb2 import BoardExists, Credentials, Pos
 from protos.GrpcExceptions import InvalidArgument, NotFound, PermissionDenied, Unauthenticated
 from google.protobuf.empty_pb2 import Empty
 
+
 def setup_logger(fileLevel=logging.INFO, outLevel=logging.DEBUG, errLevel=logging.WARN):
 
     rootLogger = logging.getLogger()
     rootLogger.setLevel(logging.DEBUG)
 
     if fileLevel is not None:
-        fileHandler = logging.FileHandler(filename='logs/message_board.log', mode='a', encoding='utf-8', delay=True)
-        formatter = logging.Formatter(fmt='%(asctime)s.%(msecs)06d:%(levelname)s:%(threadName)s:%(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        fileHandler = logging.FileHandler(
+            filename='logs/message_board.log', mode='a', encoding='utf-8', delay=True)
+        formatter = logging.Formatter(
+            fmt='%(asctime)s.%(msecs)06d:%(levelname)s:%(threadName)s:%(message)s', datefmt='%Y-%m-%d %H:%M:%S')
         fileHandler.setFormatter(formatter)
         fileHandler.setLevel(fileLevel)
         rootLogger.addHandler(fileHandler)
 
     if outLevel is not None:
         outHandler = logging.StreamHandler(sys.stdout)
-        formatter = colorlog.ColoredFormatter(fmt='%(log_color)s%(levelname)-8s%(reset)s | %(log_color)s%(message)s%(reset)s')
+        formatter = colorlog.ColoredFormatter(
+            fmt='%(log_color)s%(levelname)-8s%(reset)s | %(log_color)s%(message)s%(reset)s')
         outHandler.setFormatter(formatter)
         outHandler.setLevel(outLevel)
         rootLogger.addHandler(outHandler)
 
     if errLevel is not None:
         errHandler = logging.StreamHandler(sys.stderr)
-        formatter = colorlog.ColoredFormatter(fmt='%(log_color)s%(levelname)-8s%(reset)s | %(log_color)s%(message)s%(reset)s')
+        formatter = colorlog.ColoredFormatter(
+            fmt='%(log_color)s%(levelname)-8s%(reset)s | %(log_color)s%(message)s%(reset)s')
         errHandler.setFormatter(formatter)
         errHandler.setLevel(errLevel)
         rootLogger.addHandler(errHandler)
 
     logging.info("Logger setup completed")
+
 
 def wrap_exceptions(func):
     @wraps(func)
@@ -68,18 +74,20 @@ def wrap_exceptions(func):
         except Exception as e:
             self.logger.exception(f"{type(e).__name__}: {str(e)}")
             raise
-    
+
     return wrapper
+
 
 def log(level: int, message: str):
     def decorator(func):
         @wraps(func)
         def wrapper(self: "MessageBoardImpl", request, context):
-            msg = message.format(self = self, request = request, context = context)
+            msg = message.format(self=self, request=request, context=context)
             self.logger.log(level, msg)
             return func(self, request, context)
         return wrapper
     return decorator
+
 
 def null(variable: str, message: str = None):
     def decorator(func):
@@ -88,10 +96,12 @@ def null(variable: str, message: str = None):
             r = request
             for v in variable.split("."):
                 r = getattr(r, v)
-                if r is None: raise InvalidArgument(message)
+                if r is None:
+                    raise InvalidArgument(message)
             return func(self, request, context)
         return wrapper
     return decorator
+
 
 class MessageBoardImpl(MessageBoardServicer):
 
@@ -114,8 +124,10 @@ class MessageBoardImpl(MessageBoardServicer):
     @null("username", "Please enter a username!")
     @null("password", "Please enter a password!")
     def login(self, request: Credentials, context) -> Text:
-        if request.username not in self.passwords: raise InvalidArgument("User is not registered!")
-        if self.passwords[request.username] != request.password: raise Unauthenticated("Password is wrong!")
+        if request.username not in self.passwords:
+            raise InvalidArgument("User is not registered!")
+        if self.passwords[request.username] != request.password:
+            raise Unauthenticated("Password is wrong!")
         cookie = uuid4().hex
         self.active[cookie] = request.username
         return Text(text=cookie)
@@ -147,7 +159,7 @@ class MessageBoardImpl(MessageBoardServicer):
         index = request.index or 0
         count = request.count
         for msg in board.read(username, index, count):
-            yield Text(text = msg)
+            yield Text(text=msg)
 
     @wrap_exceptions
     @log(INFO, "Readall Request on board: '{request.boardid}' for cookie: '{request.cookie}'")
@@ -157,8 +169,8 @@ class MessageBoardImpl(MessageBoardServicer):
         username = self.get_username(request.cookie)
         board = self.get_board(request.boardid)
         for msg in board.read_all(username):
-            yield Text(text = msg)
-      
+            yield Text(text=msg)
+
     @wrap_exceptions
     @log(INFO, "Write Request on board: '{request.auth.boardid}' for cookie: '{request.auth.cookie}' and text: '{request.text}'")
     @null("auth.boardid", "Please enter a boardid!")
@@ -169,15 +181,16 @@ class MessageBoardImpl(MessageBoardServicer):
         username = self.get_username(cookie)
         board = self.get_board(request.auth.boardid)
         board.write(username, request.text)
-        
+
     @wrap_exceptions
     @log(INFO, "Create Request for board: '{request.auth.boardid}' and cookie: '{request.auth.cookie}'. Board name is '{request.boardname}' and is public: '{request.public}'")
     @null("auth.boardid", "Please enter a boardid!")
     @null("auth.cookie", "Please enter a cookie!")
     def create(self, request: BoardCreate, context):
         username = self.get_username(request.auth.cookie)
-        self.create_board(request.auth.boardid, request.boardname, username, request.public or True)
-        
+        self.create_board(request.auth.boardid, request.boardname,
+                          username, request.public or True)
+
     @wrap_exceptions
     @log(INFO, "Delete Request for board: '{request.boardid}' and cookie: '{request.cookie}'")
     @null("boardid", "Please enter a boardid!")
@@ -197,7 +210,7 @@ class MessageBoardImpl(MessageBoardServicer):
         username = self.get_username(request.auth.cookie)
         board = self.get_board(request.auth.boardid)
         board.add_owner(username, request.text)
-        
+
     @wrap_exceptions
     @log(INFO, "Add Reader Request for board: '{request.auth.boardid}' and cookie: '{request.auth.cookie}' for new username: '{request.text}'")
     @null("auth.boardid", "Please enter a boardid!")
@@ -207,7 +220,7 @@ class MessageBoardImpl(MessageBoardServicer):
         username = self.get_username(request.auth.cookie)
         board = self.get_board(request.auth.boardid)
         board.add_reader(username, request.text)
-        
+
     @wrap_exceptions
     @log(INFO, "Remove Owner Request for board: '{request.auth.boardid}' and cookie: '{request.auth.cookie}' for new username: '{request.text}'")
     @null("auth.boardid", "Please enter a boardid!")
@@ -217,7 +230,7 @@ class MessageBoardImpl(MessageBoardServicer):
         username = self.get_username(request.auth.cookie)
         board = self.get_board(request.auth.boardid)
         board.remove_owner(username, request.text)
-        
+
     @wrap_exceptions
     @log(INFO, "Remove Reader Request for board: '{request.auth.boardid}' and cookie: '{request.auth.cookie}' for new username: '{request.text}'")
     @null("auth.boardid", "Please enter a boardid!")
@@ -232,7 +245,7 @@ class MessageBoardImpl(MessageBoardServicer):
     @log(INFO, "Rename Request for board: '{request.auth.boardid}' and cookie: '{request.auth.cookie}' for new boardname: '{request.text}'")
     @null("auth.boardid", "Please enter a boardid!")
     @null("auth.cookie", "Please enter a cookie!")
-    @null("text", "Please enter a username!")
+    @null("text", "Please enter a new board name!")
     def rename(self, request: BoardText, context):
         username = self.get_username(request.auth.cookie)
         board = self.get_board(request.auth.boardid)
@@ -245,8 +258,9 @@ class MessageBoardImpl(MessageBoardServicer):
     def get_name(self, request: BoardAuth, context):
         username = self.get_username(request.cookie)
         board = self.get_board(request.boardid)
-        return board.get_name(username)
-        
+        boardname = board.get_name(username)
+        return Text(text=boardname)
+
     @wrap_exceptions
     @log(INFO, "Board Exists Request for board: '{request.boardid}' and cookie: '{request.cookie}'")
     @null("boardid", "Please enter a boardid!")
@@ -265,12 +279,13 @@ class MessageBoardImpl(MessageBoardServicer):
         if boardid not in self.boards:
             raise InvalidArgument("This board does not exist!")
         return self.boards[boardid]
-    
+
     def create_board(self, boardid: str, boardname: str, username: str, public: bool = True):
         if boardid in self.boards:
             raise InvalidArgument("This board already exists!")
         self.boards[boardid] = Board(boardname, username, public)
-    
+
+
 async def serve():
     logging.info("server setup")
     server = grpc.aio.server(ThreadPoolExecutor(max_workers=10))

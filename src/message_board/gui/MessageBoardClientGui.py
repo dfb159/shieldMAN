@@ -2,52 +2,43 @@ import asyncio
 from uuid import uuid4
 import grpc
 from message_board.MessageBoardClient import MessageBoardClient
-from message_board.gui.components import BoardMenu, GUIComponent, LoginMenu, MainMenu, RegisterMenu
+from message_board.gui.GuiExtention import PinGroupComponent
+from message_board.gui.components import BoardMenu, LoginMenu, MainMenu, PinComponent, RegisterMenu
 import PySimpleGUI as sg
+
 
 class MessageBoardClientGui:
     client: MessageBoardClient
     window: sg.Window
-    components: list[GUIComponent]
-    
+    pin_group: PinGroupComponent
+
     def __init__(self, channel):
         self.client = MessageBoardClient(channel)
-        self.components = [MainMenu(), LoginMenu(), RegisterMenu(), BoardMenu()]
-        self.window = sg.Window("MessageBoard Client", self.layout)
-
-    async def set(self, component: str | None, *args, **kwargs):
-        """Shows only the given component."""
-        if component is None: return
-        
-        for comp in self.components:
-            if comp.key==component:
-                self.window[comp.key].update(visible=True)
-                await comp.set(self.window, *args, **kwargs)
-            else:
-                self.window[comp.key].update(visible=False)
-
-    @property
-    def layout(self):
-        return [comp.get for comp in self.components]
+        self.pin_group = PinGroupComponent(
+            MainMenu(), LoginMenu(), RegisterMenu(), BoardMenu())
+        self.window = sg.Window("MessageBoard Client", self.pin_group.layout)
 
     async def run(self):
         while True:
-            event, values = self.window.read() # this will show the window with all oumulated updates
-            
-            if event == sg.WIN_CLOSED: break
-            for comp in self.components:
-                if event.startswith(comp.key):
-                    await comp(event, values, self.window, self.set, self.client)
-                    break
-        
+            # this will show the window with all cumulated updates
+            event, values = self.window.read(timeout=1000)
+            # print(event, values)
+
+            if event == sg.WIN_CLOSED:
+                break
+            # if event == sg.EVENT_TIMEOUT: print("timeout")
+            await self.pin_group(event, values, self.window, self.client)
+
         self.window.close()
-        
+        self.client.logout()
+
+
 async def main():
     async with grpc.aio.insecure_channel('localhost:50051') as channel:
         gui = MessageBoardClientGui(channel)
         await gui.client.write_flag("flaghunter", uuid4().hex, "flagboard", f"flag{{{uuid4().hex}}}")
         await gui.run()
-        #c.interactive()
-    
+        # c.interactive()
+
 if __name__ == "__main__":
     asyncio.run(main())
