@@ -1,91 +1,62 @@
 from typing import Generator
 import grpc
 import asyncio
+from message_board.MessageBoardConnector import MessageBoardConnector
 from protos.message_board.message_board_pb2 import BoardAuth, BoardCreate, BoardExists, BoardReadRange, BoardText, Credentials, PostCount, Text
 from protos.message_board.message_board_pb2_grpc import MessageBoardStub
 
-class MessageBoardClient:
+class MessageBoardClient(MessageBoardConnector):
+    cookie: str | None
 
     def __init__(self, channel):
-        self.stub = MessageBoardStub(channel)
+        super().__init__(channel)
+        self.cookie = None
 
-    async def register(self, username: str, password: str):
-        creds = Credentials(username=username, password=password)
-        await self.stub.register(creds)
+    async def login(self, username: str, password: str):
+        self.cookie = await super().login(username, password)
 
-    async def login(self, username: str, password: str) -> str:
-        creds = Credentials(username=username, password=password)
-        resp: Text = await self.stub.login(creds)
-        return resp.text
+    async def logout(self):
+        await super().logout(self.cookie)
+        self.cookie = None
 
-    async def logout(self, cookie: str):
-        cookie = Text(text=cookie)
-        await self.stub.logout(cookie)
+    def get_count(self, boardid: str) -> int:
+        return super().get_count(boardid, self.cookie)
 
-    async def get_count(self, boardid: str, cookie: str) -> int:
-        auth = BoardAuth(boardid=boardid, cookie=cookie)
-        resp: PostCount = await self.stub.get_count(auth)
-        return resp.count
+    def read(self, boardid: str, index: int = 0, count: int = 1) -> Generator[str, None, None]:
+        return super().read(boardid, self.cookie, index, count)
 
-    async def read(self, boardid: str, cookie: str, index: int = 0, count: int = 1) -> Generator[str, None, None]:
-        auth = BoardAuth(boardid=boardid, cookie=cookie)
-        board_range = BoardReadRange(auth=auth, index=index, count=count)
-        async for resp in self.stub.read(board_range):
-            yield resp.text
+    def read_all(self, boardid: str) -> Generator[str, None, None]:
+        return super().read_all(boardid, self.cookie)
 
-    async def read_all(self, boardid: str, cookie: str) -> Generator[str, None, None]:
-        auth = BoardAuth(boardid=boardid, cookie=cookie)
-        async for resp in self.stub.read_all(auth):
-            yield resp.text
+    def write(self, boardid: str, text: str):
+        return super().write(boardid, self.cookie, text)
 
-    async def write(self, boardid: str, cookie: str, text: str):
-        auth = BoardAuth(boardid=boardid, cookie=cookie)
-        board_text = BoardText(auth=auth, text=text)
-        await self.stub.write(board_text)
+    def create(self, boardid: str, boardname: str, public: bool = True):
+        return super().create(boardid, self.cookie, boardname, public)
 
-    async def create(self, boardid: str, cookie: str, boardname: str, public: bool = True):
-        auth = BoardAuth(boardid=boardid, cookie=cookie)
-        board_create = BoardCreate(auth=auth, boardname=boardname, public=public)
-        await self.stub.create(board_create)
+    def delete(self, boardid: str):
+        return super().delete(boardid, self.cookie)
 
-    async def delete(self, boardid: str, cookie: str):
-        auth = BoardAuth(boardid=boardid, cookie=cookie)
-        await self.stub.delete(auth)
+    def add_owner(self, boardid: str, username: str):
+        return super().add_owner(boardid, self.cookie, username)
 
-    async def add_owner(self, boardid: str, cookie: str, username: str):
-        auth = BoardAuth(boardid=boardid, cookie=cookie)
-        board_text = BoardText(auth=auth, text=username)
-        await self.stub.add_owner(board_text)
+    def add_reader(self, boardid: str, cookie: str, username: str):
+        return super().add_reader(boardid, self.cookie, username)
 
-    async def add_reader(self, boardid: str, cookie: str, username: str):
-        auth = BoardAuth(boardid=boardid, cookie=cookie)
-        board_text = BoardText(auth=auth, text=username)
-        await self.stub.add_reader(board_text)
+    def remove_owner(self, boardid: str, username: str):
+        return super().remove_owner(boardid, self.cookie, username)
 
-    async def remove_owner(self, boardid: str, cookie: str, username: str):
-        auth = BoardAuth(boardid=boardid, cookie=cookie)
-        board_text = BoardText(auth=auth, text=username)
-        await self.stub.remove_owner(board_text)
+    def remove_reader(self, boardid: str, username: str):
+        return super().remove_reader(boardid, self.cookie, username)
 
-    async def remove_reader(self, boardid: str, cookie: str, username: str):
-        auth = BoardAuth(boardid=boardid, cookie=cookie)
-        board_text = BoardText(auth=auth, text=username)
-        await self.stub.remove_reader(board_text)
+    def rename(self, boardid: str, boardname: str):
+        return super().rename(boardid, self.cookie, boardname)
 
-    async def rename(self, boardid: str, cookie: str, boardname: str):
-        auth = BoardAuth(boardid=boardid, cookie=cookie)
-        board_text = BoardText(auth=auth, text=boardname)
-        await self.stub.rename(board_text)
+    def get_name(self, boardid: str):
+        return super().get_name(boardid, self.cookie)
 
-    async def get_name(self, boardid: str, cookie: str) -> str:
-        auth = BoardAuth(boardid=boardid, cookie=cookie)
-        resp: Text = await self.stub.get_name(auth)
-        return resp.text
-
-    async def exists(self, boardid: str, cookie: str) -> bool:
-        auth = BoardAuth(boardid=boardid, cookie=cookie)
-        resp: BoardExists = await self.stub.exists(auth)
-        return resp.exists
+    def exists(self, boardid: str):
+        return super().exists(boardid, self.cookie)
 
     def interactive(self):
         while cmd := input("cmd: "):
@@ -97,32 +68,32 @@ class MessageBoardClient:
             except Exception as e:
                 print(e)
 
-    async def init_testuser(self) -> str:
+    async def init_testuser(self):
         await self.register("Test", "test")
-        return await self.login("Test", "test")
+        await self.login("Test", "test")
 
     async def write_flag(self, username: str, password: str, boardname: str, flag: str):
         await self.register(username, password)
-        cookie = await self.login(username, password)
-        if not await self.exists(boardname, cookie):
-            await self.create(boardname, cookie, boardname)
-        await self.write(boardname, cookie, flag)
-        await self.logout(cookie)
+        await self.login(username, password)
+        if not await self.exists(boardname):
+            await self.create(boardname, boardname)
+        await self.write(boardname, flag)
+        await self.logout()
 
 async def main():
     async with grpc.aio.insecure_channel('localhost:50051') as channel:
         client = MessageBoardClient(channel)
         await client.register("Test", "test")
-        cookie = await client.login("Test", "test")
-        if not await client.exists("nice", cookie):
-            await client.create("nice", cookie, "nice")
-        await client.write("nice", cookie, "-"*10)
+        await client.login("Test", "test")
+        if not await client.exists("nice"):
+            await client.create("nice", "nice")
+        await client.write("nice", "-"*10)
 
         async with asyncio.TaskGroup() as tg: # starts all coroutines and awaits all of them
             for n in range(10):
-                tg.create_task(client.write("nice", cookie, f"parallel{n}"))
+                tg.create_task(client.write("nice", f"parallel{n}"))
 
-        async for text in client.read_all("nice", cookie):
+        async for text in client.read_all("nice"):
             print(text)
 
         #client.interactive()
