@@ -1,7 +1,7 @@
 from typing import Generator
 import grpc
 import asyncio
-from protos.message_board.message_board_pb2 import BoardAuth, BoardCreate, BoardReadRange, BoardText, Credentials, PostCount, Text
+from protos.message_board.message_board_pb2 import BoardAuth, BoardCreate, BoardExists, BoardReadRange, BoardText, Credentials, PostCount, Text
 from protos.message_board.message_board_pb2_grpc import MessageBoardStub
 
 class MessageBoardClient:
@@ -79,11 +79,13 @@ class MessageBoardClient:
 
     async def get_name(self, boardid: str, cookie: str) -> str:
         auth = BoardAuth(boardid=boardid, cookie=cookie)
-        return await self.stub.get_name(auth).text
+        resp: Text = await self.stub.get_name(auth)
+        return resp.text
 
     async def exists(self, boardid: str, cookie: str) -> bool:
         auth = BoardAuth(boardid=boardid, cookie=cookie)
-        return await self.stub.exists(auth).exists
+        resp: BoardExists = await self.stub.exists(auth)
+        return resp.exists
 
     def interactive(self):
         while cmd := input("cmd: "):
@@ -102,7 +104,8 @@ class MessageBoardClient:
     async def write_flag(self, username: str, password: str, boardname: str, flag: str):
         await self.register(username, password)
         cookie = await self.login(username, password)
-        await self.create(boardname, cookie, boardname, False)
+        if not await self.exists(boardname, cookie):
+            await self.create(boardname, cookie, boardname)
         await self.write(boardname, cookie, flag)
         await self.logout(cookie)
 

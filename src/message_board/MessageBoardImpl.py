@@ -121,10 +121,10 @@ class MessageBoardImpl(MessageBoardServicer):
         return Text(text=cookie)
 
     @wrap_exceptions
-    @log(INFO, "Logout Request for cookie: '{request.cookie}'")
-    @null("cookie", "Please enter a cookie!")
+    @log(INFO, "Logout Request for cookie: '{request.text}'")
+    @null("text", "Please enter a cookie!")
     def logout(self, request: Text, context):
-        if request.text not in self.active: raise Unauthenticated("Cookie is not authenticated!")
+        username = self.get_username(request.text)
         del self.active[request.text]
 
     @wrap_exceptions
